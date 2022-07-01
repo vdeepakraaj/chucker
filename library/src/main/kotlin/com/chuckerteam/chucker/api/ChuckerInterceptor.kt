@@ -3,6 +3,7 @@ package com.chuckerteam.chucker.api
 import android.content.Context
 import androidx.annotation.VisibleForTesting
 import com.chuckerteam.chucker.internal.data.entity.HttpTransaction
+import com.chuckerteam.chucker.internal.support.shouldIgnore
 import com.chuckerteam.chucker.internal.support.CacheDirectoryProvider
 import com.chuckerteam.chucker.internal.support.PlainTextDecoder
 import com.chuckerteam.chucker.internal.support.RequestProcessor
@@ -31,6 +32,8 @@ public class ChuckerInterceptor private constructor(
     public constructor(context: Context) : this(Builder(context))
 
     private val headersToRedact = builder.headersToRedact.toMutableSet()
+
+    private val ignoreApiList = builder.ignoreApiList.toMutableList()
 
     private val decoders = builder.decoders + BUILT_IN_DECODERS
 
@@ -69,17 +72,27 @@ public class ChuckerInterceptor private constructor(
         val transaction = HttpTransaction()
         val request = chain.request()
 
-        requestProcessor.process(request, transaction)
+        // Processing of request will be called only for the api's that is not in ignoredList
+        if (!ignoreApiList.shouldIgnore(request.url.toUrl().toString())) {
+            requestProcessor.process(request, transaction)
+        }
 
         val response = try {
             chain.proceed(request)
         } catch (e: IOException) {
             transaction.error = e.toString()
-            collector.onResponseReceived(transaction)
+            // Chucker collector of the error response will be called only for the api's that is not in ignoredList
+            if (!ignoreApiList.shouldIgnore(request.url.toUrl().toString())) {
+                collector.onResponseReceived(transaction)
+            }
             throw e
         }
-
-        return responseProcessor.process(response, transaction)
+        // Processing of response will be called only for the api's that is not in ignoredList
+        return if (!ignoreApiList.shouldIgnore(request.url.toUrl().toString())) {
+            responseProcessor.process(response, transaction)
+        } else {
+            response
+        }
     }
 
     /**
@@ -93,6 +106,7 @@ public class ChuckerInterceptor private constructor(
         internal var cacheDirectoryProvider: CacheDirectoryProvider? = null
         internal var alwaysReadResponseBody = false
         internal var headersToRedact = emptySet<String>()
+        internal var ignoreApiList = emptyList<String>()
         internal var decoders = emptyList<BodyDecoder>()
         internal var createShortcut = true
 
@@ -153,6 +167,14 @@ public class ChuckerInterceptor private constructor(
          */
         public fun createShortcut(enable: Boolean): Builder = apply {
             this.createShortcut = enable
+        }
+
+        /**
+         * If the http url matches with the apiList been passed, the respective url will be
+         * ignored to be shown in the chucker UI .
+         */
+        public fun ignoreApis(apiList: Iterable<String>): Builder = apply {
+            this.ignoreApiList = apiList.toMutableList()
         }
 
         /**

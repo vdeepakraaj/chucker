@@ -117,8 +117,10 @@ val chuckerInterceptor = ChuckerInterceptor.Builder(context)
         // Use decoder when processing request and response bodies. When multiple decoders are installed they
         // are applied in an order they were added.
         .addBodyDecoder(decoder)
+        // Use ignoreApis when required to hide unwanted api calls from chucker UI
+        .ignoreApis(listOf("substringOfUrl1","substringOfUrl2"))
         // Controls Android shortcut creation. Available in SNAPSHOTS versions only at the moment
-        .createShortcut(true)
+         .createShortcut(true)
         .build()
 
 // Don't forget to plug the ChuckerInterceptor inside the OkHttpClient
